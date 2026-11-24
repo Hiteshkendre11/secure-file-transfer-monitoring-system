@@ -1,30 +1,14 @@
-
 {
-    "monitoring": {
-        "enabled": true,
-        "hash_algorithms": [
-            "sha256",
-            "md5"
-        ]
-    },
-    "sensitive_paths": [
-        "D:\\fileMonitorLab\\TransferTest"
-    ],
-    "restricted_destinations": [],
-    "allowed_destinations": [
-        "D:\\fileMonitorLab\\Destination"
-    ],
-    "suspicious_extensions": [
-        ".exe",
-        ".bat",
-        ".cmd",
-        ".ps1",
-        ".vbs",
-        ".js",
-        ".scr"
-    ],
-    "alerts": {
-        "enabled": true,
-        "log_policy_violations": true
-    }
+  "monitoring": {
+    "enabled": true,
+    "hash_algorithms": ["sha256", "md5"]
+  },
+  "sensitive_paths": ["${PROJECT_ROOT}/TransferTest"],
+  "restricted_destinations": [],
+  "allowed_destinations": ["${PROJECT_ROOT}/Destination"],
+  "suspicious_extensions": [".exe", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".scr"],
+  "alerts": {
+    "enabled": true,
+    "log_policy_violations": true
+  }
 }

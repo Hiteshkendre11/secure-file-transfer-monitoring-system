@@ -1,8 +1,5 @@
-
 import json
 import os
-import tempfile
-import threading
 from datetime import datetime
 
 
@@ -11,7 +8,9 @@ from datetime import datetime
 # ============================================================
 
 BASE_DIR = os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
 )
 
 HASH_STORE_DIR = os.path.join(
@@ -24,41 +23,6 @@ HASH_STORE_FILE = os.path.join(
     "hash_store.json"
 )
 
-# Prevent simultaneous read/write operations from conflicting.
-_STORE_LOCK = threading.RLock()
-
-
-# ============================================================
-# PATH NORMALIZATION
-# ============================================================
-
-def normalize_path(file_path):
-    """
-    Return a normalized absolute file path.
-    """
-
-    return os.path.normcase(
-        os.path.abspath(file_path)
-    )
-
-
-def find_existing_key(data, file_path):
-    """
-    Find an existing path key, including entries created
-    by older versions of this hash store.
-    """
-
-    normalized_path = normalize_path(file_path)
-
-    if normalized_path in data:
-        return normalized_path
-
-    for stored_path in data:
-        if normalize_path(stored_path) == normalized_path:
-            return stored_path
-
-    return None
-
 
 # ============================================================
 # INITIALIZATION
@@ -66,7 +30,7 @@ def find_existing_key(data, file_path):
 
 def initialize_hash_store():
     """
-    Create the hash storage directory and JSON file
+    Create the hash storage directory and file
     if they do not already exist.
     """
 
@@ -76,7 +40,18 @@ def initialize_hash_store():
     )
 
     if not os.path.exists(HASH_STORE_FILE):
-        save_hash_store({})
+
+        with open(
+            HASH_STORE_FILE,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            json.dump(
+                {},
+                file,
+                indent=4
+            )
 
 
 # ============================================================
@@ -86,40 +61,31 @@ def initialize_hash_store():
 def load_hash_store():
     """
     Load all stored file hashes.
-
-    A corrupted JSON file raises an error rather than
-    silently returning an empty store and hiding baselines.
     """
 
-    with _STORE_LOCK:
+    initialize_hash_store()
 
-        initialize_hash_store()
+    try:
 
-        try:
-            with open(
-                HASH_STORE_FILE,
-                "r",
-                encoding="utf-8"
-            ) as file:
+        with open(
+            HASH_STORE_FILE,
+            "r",
+            encoding="utf-8"
+        ) as file:
 
-                data = json.load(file)
+            data = json.load(file)
 
-            if not isinstance(data, dict):
-                raise ValueError(
-                    "Hash store must contain a JSON object."
-                )
+            if isinstance(data, dict):
+                return data
 
-            return data
+            return {}
 
-        except json.JSONDecodeError as error:
-            raise RuntimeError(
-                f"Hash store JSON is corrupted: {HASH_STORE_FILE}"
-            ) from error
+    except (
+        json.JSONDecodeError,
+        OSError
+    ):
 
-        except OSError as error:
-            raise RuntimeError(
-                f"Unable to read hash store: {error}"
-            ) from error
+        return {}
 
 
 # ============================================================
@@ -128,94 +94,61 @@ def load_hash_store():
 
 def save_hash_store(data):
     """
-    Save the complete hash store safely.
-
-    Uses a temporary file and atomic replacement to reduce
-    the risk of incomplete JSON writes.
+    Save the complete hash store.
     """
 
-    with _STORE_LOCK:
+    initialize_hash_store()
 
-        os.makedirs(
-            HASH_STORE_DIR,
-            exist_ok=True
+    temporary_file = (
+        HASH_STORE_FILE + ".tmp"
+    )
+
+    with open(
+        temporary_file,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            data,
+            file,
+            indent=4
         )
 
-        temporary_path = None
-
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                dir=HASH_STORE_DIR,
-                suffix=".tmp",
-                delete=False
-            ) as file:
-
-                temporary_path = file.name
-
-                json.dump(
-                    data,
-                    file,
-                    indent=4
-                )
-
-                file.flush()
-                os.fsync(file.fileno())
-
-            os.replace(
-                temporary_path,
-                HASH_STORE_FILE
-            )
-
-        except OSError:
-            if temporary_path and os.path.exists(temporary_path):
-                try:
-                    os.remove(temporary_path)
-                except OSError:
-                    pass
-
-            raise
+    os.replace(
+        temporary_file,
+        HASH_STORE_FILE
+    )
 
 
 # ============================================================
 # STORE FILE HASHES
 # ============================================================
 
-def store_file_hashes(file_path, sha256, md5):
+def store_file_hashes(
+    file_path,
+    sha256,
+    md5
+):
     """
     Store SHA-256 and MD5 hashes for a file.
     """
 
-    if not file_path:
-        raise ValueError("File path cannot be empty.")
+    data = load_hash_store()
 
-    if not sha256 or not md5:
-        raise ValueError("Both SHA-256 and MD5 hashes are required.")
+    normalized_path = os.path.abspath(
+        file_path
+    )
 
-    with _STORE_LOCK:
-
-        data = load_hash_store()
-
-        normalized_path = normalize_path(file_path)
-
-        existing_key = find_existing_key(
-            data,
-            file_path
+    data[normalized_path] = {
+        "sha256": sha256,
+        "md5": md5,
+        "stored_at": datetime.now().isoformat(
+            timespec="seconds"
         )
+    }
 
-        if existing_key and existing_key != normalized_path:
-            del data[existing_key]
-
-        data[normalized_path] = {
-            "sha256": sha256,
-            "md5": md5,
-            "stored_at": datetime.now().isoformat(
-                timespec="seconds"
-            )
-        }
-
-        save_hash_store(data)
+    save_hash_store(data)
 
 
 # ============================================================
@@ -224,27 +157,20 @@ def store_file_hashes(file_path, sha256, md5):
 
 def get_file_hashes(file_path):
     """
-    Return stored hashes for a file.
+    Return the stored hashes for a file.
 
-    Returns None if no baseline exists.
+    Returns None if the file has no stored baseline.
     """
 
-    if not file_path:
-        return None
+    data = load_hash_store()
 
-    with _STORE_LOCK:
+    normalized_path = os.path.abspath(
+        file_path
+    )
 
-        data = load_hash_store()
-
-        existing_key = find_existing_key(
-            data,
-            file_path
-        )
-
-        if existing_key is None:
-            return None
-
-        return data[existing_key]
+    return data.get(
+        normalized_path
+    )
 
 
 # ============================================================
@@ -256,80 +182,21 @@ def remove_file_hash(file_path):
     Remove a file's stored hash entry.
     """
 
-    if not file_path:
-        return False
+    data = load_hash_store()
 
-    with _STORE_LOCK:
+    normalized_path = os.path.abspath(
+        file_path
+    )
 
-        data = load_hash_store()
+    if normalized_path in data:
 
-        existing_key = find_existing_key(
-            data,
-            file_path
-        )
-
-        if existing_key is None:
-            return False
-
-        del data[existing_key]
+        del data[normalized_path]
 
         save_hash_store(data)
 
         return True
 
-
-# ============================================================
-# MOVE / RENAME FILE HASH
-# ============================================================
-
-def move_file_hash(old_path, new_path):
-    """
-    Move an existing hash baseline from the old file path
-    to the new file path.
-
-    This preserves the original SHA-256 and MD5 values
-    when a monitored file is renamed or moved.
-    """
-
-    if not old_path or not new_path:
-        return False
-
-    old_normalized = normalize_path(old_path)
-    new_normalized = normalize_path(new_path)
-
-    if old_normalized == new_normalized:
-        return get_file_hashes(new_path) is not None
-
-    with _STORE_LOCK:
-
-        data = load_hash_store()
-
-        old_key = find_existing_key(
-            data,
-            old_path
-        )
-
-        if old_key is None:
-            return False
-
-        new_key = find_existing_key(
-            data,
-            new_path
-        )
-
-        # Preserve the old baseline under the new path.
-        hashes = data[old_key]
-
-        del data[old_key]
-
-        if new_key and new_key != old_key:
-            del data[new_key]
-
-        data[new_normalized] = hashes
-
-        save_hash_store(data)
-
-        return True
+    return False
 
 
 # ============================================================
@@ -344,20 +211,24 @@ def main():
     print("HASH STORE TEST")
     print("-" * 70)
 
-    test_file = os.path.join(
-        BASE_DIR,
-        "TransferTest",
-        "hash_store_test.txt"
+    test_file = (
+        r"D:\FileMonitorLabTest\hash_store_test.txt"
     )
 
-    renamed_file = os.path.join(
-        BASE_DIR,
-        "TransferTest",
-        "hash_store_test_renamed.txt"
+    test_sha256 = (
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     )
 
-    test_sha256 = "a" * 64
-    test_md5 = "b" * 32
+    test_md5 = (
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    )
+
+    print(
+        f"Test file: {test_file}"
+    )
+
+    print()
 
     # Store test hashes.
     store_file_hashes(
@@ -366,53 +237,76 @@ def main():
         test_md5
     )
 
-    print("[PASS] Hash storage")
+    print(
+        "[STORE] Hashes stored successfully."
+    )
 
     # Retrieve test hashes.
-    stored_hashes = get_file_hashes(test_file)
+    stored_hashes = get_file_hashes(
+        test_file
+    )
 
+    print()
+
+    print(
+        "[RETRIEVE] Stored hash information:"
+    )
+
+    print(
+        json.dumps(
+            stored_hashes,
+            indent=4
+        )
+    )
+
+    print()
+
+    # Verify retrieved values.
     if (
-        stored_hashes
+        stored_hashes is not None
         and stored_hashes["sha256"] == test_sha256
         and stored_hashes["md5"] == test_md5
     ):
-        print("[PASS] Hash retrieval")
+
+        print(
+            "[RESULT] Hash storage test PASSED."
+        )
+
     else:
-        print("[FAIL] Hash retrieval")
 
-    # Test rename migration.
-    moved = move_file_hash(
-        test_file,
-        renamed_file
-    )
+        print(
+            "[RESULT] Hash storage test FAILED."
+        )
 
-    renamed_hashes = get_file_hashes(
-        renamed_file
-    )
+    print()
 
-    if (
-        moved
-        and renamed_hashes
-        and renamed_hashes["sha256"] == test_sha256
-        and renamed_hashes["md5"] == test_md5
-    ):
-        print("[PASS] Rename hash migration")
-    else:
-        print("[FAIL] Rename hash migration")
-
-    # Test removal.
+    # Remove test entry.
     removed = remove_file_hash(
-        renamed_file
+        test_file
     )
 
-    if removed and get_file_hashes(renamed_file) is None:
-        print("[PASS] Hash removal")
-    else:
-        print("[FAIL] Hash removal")
+    if removed:
+
+        print(
+            "[CLEANUP] Test hash entry removed."
+        )
 
     print("-" * 70)
-    print("HASH STORE TEST COMPLETED")
-    print("=" * 70)
+
+    # Confirm removal.
+    if get_file_hashes(test_file) is None:
+
+        print(
+            "[RESULT] Hash removal test PASSED."
+        )
+
+    else:
+
+        print(
+            "[RESULT] Hash removal test FAILED."
+        )
+
+    print("-" * 70)
 
 
 if __name__ == "__main__":

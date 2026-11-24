@@ -1,0 +1,35 @@
+SECURE FILE TRANSFER MONITORING SYSTEM - AUDITOR QUICK START
+
+REQUIREMENTS
+- Windows 10 or Windows 11
+- Python 3 installed and available through the Windows Python launcher (py)
+- Internet connection
+- Render dashboard URL and API token supplied by the project owner
+
+START
+1. Extract the downloaded ZIP to a normal local folder.
+2. Open the extracted folder.
+3. Double-click Run_Auditor_Agent.bat.
+4. Enter the Render service URL when prompted.
+5. Enter the API token supplied privately by the project owner.
+6. The script installs watchdog and pywin32, then starts monitoring.
+
+TEST
+1. Create a harmless .txt file in TransferTest.
+2. Add text and save; confirm FILE_MODIFIED and integrity status events.
+3. Rename the file; confirm FILE_MOVED and baseline migration when a move event is reported.
+4. Create a file ending in .ps1 but DO NOT execute it; confirm SUSPICIOUS_FILE_EXTENSION.
+5. Copy a file to Destination; Windows may report separate source deletion and destination creation events.
+6. Open the Render dashboard and switch to Live events.
+
+SCOPE AND PRIVACY
+- The agent recursively monitors only the bundled TransferTest and Destination folders.
+- It does not monitor all drives or all folders on the auditor's computer.
+- It sends event metadata and filenames to the cloud API; it does not send file contents or complete local paths.
+- Local activity logs and hash baselines are stored in the extracted folder's logs directory.
+- Security policy alerts are detection-only; they do not block file operations.
+- Process and user attribution are not implemented by the current Watchdog event source.
+- Keep the API token private. Do not post it in GitHub, screenshots, or public issues.
+
+STOP
+Press Ctrl+C in the agent console window.

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: secure-file-transfer-monitoring-system
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: AGENT_API_TOKEN
+        sync: false
+      - key: EVENT_DB_PATH
+        value: /tmp/sftms-events.sqlite3
