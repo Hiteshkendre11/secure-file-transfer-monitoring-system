@@ -1,0 +1,36 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments and local environment files
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime logs, hash baselines, and temporary data
+logs/
+*.log
+*.tmp
+
+# Local test files - keep the folders, not their contents
+TransferTest/*
+!TransferTest/.gitkeep
+Destination/*
+!Destination/.gitkeep
+
+# Build outputs
+build/
+dist/
+*.spec
